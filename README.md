@@ -1,4 +1,8 @@
-# jejucd: Pure-Binary GitOps CD for the Rest of Us
+# JejuCD
+
+**Practical GitOps CD for real-world infrastructure.**
+
+[English](README.md) | [한국어](README.ko.md)
 
 ![Dolhareubang view](docs/assets/dolhareubang.jpg)
 
@@ -6,99 +10,89 @@
 ![Powered by Axum](https://img.shields.io/badge/Powered%20by-Axum-blue)
 ![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)
 
-Modern continuous delivery shouldn't require a PhD in Kubernetes. jejucd brings the declarative power, drift reconciliation, and safety of GitOps directly to bare-metal servers, VPS, and Edge devices using pure binaries.
+JejuCD is a lightweight GitOps CD tool for teams that do not need Kubernetes everywhere, but still want the convenience of managing deployment state from Git like Argo CD.
 
-No containers. No orchestrator overhead. Just your code, Git, and systemd.
+PaaS platforms such as Vercel and Supabase are excellent for early adoption and fast product validation. But as a service grows, teams may need more control over cost, network access, on-premise environments, regional infrastructure, and security requirements.
+
+Kubernetes is powerful, but it can be too complex and labor-intensive for small and mid-sized companies, regional offices, factory sites, edge fleets, and regulated environments.
+
+JejuCD targets the practical middle ground between PaaS convenience and Kubernetes complexity. It deploys application artifacts directly to existing VMs, EC2 instances, bare-metal servers, and edge devices without container orchestration, then safely reconciles server state from the desired state declared in Git.
 
 ---
 
-## Why jejucd?
+## Who Is It For?
 
 ![seongsanpeak](docs/assets/seongsanpeak.jpg)
 
-For SMBs, on-premise environments, and IoT edge networks, deploying heavy Kubernetes clusters or relying on expensive PaaS (like Vercel or Supabase) is often overkill and cost-prohibitive.
+JejuCD is designed for teams that:
 
-jejucd is designed for teams that want the operational elegance of ArgoCD, but the raw performance and simplicity of running statically compiled binaries (Rust, Go) or standalone runtimes directly on Linux.
+- need safer deployment than manual server operations, but are not ready for Kubernetes
+- want to reduce dependency on PaaS or large cloud platforms
+- need to use existing servers, on-premise infrastructure, closed networks, regional sites, or edge devices
+- want GitOps-style deployment history without a dedicated Kubernetes operations team
+- need clear control over which applications run on which servers
 
----
-
-## Core Features
-
-![jusanjeoli](docs/assets/jusanjeoli.jpg)
-
-* **Zero K8s Overhead:** Runs flawlessly on anything from a $5 VPS to a massive on-premise data center.
-* **Native systemd Delegation:** We don't reinvent the wheel. The jejucd Agent delegates process lifecycle, crash recovery, and log management to Linux's native systemd, ensuring bulletproof reliability.
-* **Double-Lock Targeting:** Prevent catastrophic deployments. Targets are calculated using a strict intersection of Enums (Role, Env) and Tags ($Target = Enum \cap Tag$).
-* **Zero Blast Radius:** We enforce a strict 1:1 mapping between node configuration files and physical hardware. A misconfiguration in a single file will never cascade to other nodes.
-* **Blazing Fast & Ultra-Lightweight:** Both the Manager and Agent are written in Rust (Axum). The Agent has a microscopic memory footprint and zero garbage collection pauses.
+JejuCD is not positioned as a Kubernetes replacement. It is a practical GitOps CD tool for the stage before Kubernetes, or for organizations where Kubernetes is simply more than they need.
 
 ---
 
-## Architecture Overview
+## How It Works
 
 ![jejuflower](docs/assets/jejuflower.jpg)
 
-The jejucd ecosystem consists of three main components:
+JejuCD reconciles each server from the desired state declared in Git.
 
-1. **Git State Repository:** The single source of truth. Contains the exact desired state of every single node and application.
-2. **Manager App:** The control plane. It observes the Git repository, calculates diffs, and securely coordinates with the Agents.
-3. **Agent App:** A lightweight daemon installed on your target servers. It listens for state changes, downloads the required binaries, updates the `.service` files, and issues `systemctl` commands.
+1. Servers and applications are declared in TOML files in a Git repository.
+2. The Manager reads Git changes and calculates the required state difference.
+3. The Agent on each server applies only the configuration that belongs to that server.
+4. The Agent downloads the required application artifacts and applies systemd, Nginx, and runtime configuration safely.
+5. A deployment happens only when the application's target conditions and the server's declared role/tag conditions both match.
 
 ```mermaid
 graph LR
-    A[Git Repo] -->|State Sync| B(jejucd Manager)
-    B -->|gRPC / WebSockets| C(jejucd Agent)
-    C -->|Download Binary| D[App Artifacts]
-    C -->|Render & Reload| E[systemd]
-    E -->|Manage Process| F[Running App]
+    A[Git Repository] -->|Desired State| B(JejuCD Manager)
+    B -->|State Sync| C(JejuCD Agent)
+    C -->|Download Artifact| D[App Artifacts]
+    C -->|Apply Config| E[systemd / Nginx / Runtime]
+    E -->|Run| F[Application]
 ```
 
 ---
 
-## The "Zero Blast Radius" Philosophy
+## Core Philosophy
 
-![horse-light-house](docs/assets/horse-light-house.jpg)
+![jusanjeoli](docs/assets/jusanjeoli.jpg)
 
-Managing configurations for thousands of nodes via group abstractions usually leads to unmanageable "snowflake" exceptions. jejucd embraces extreme simplicity: **One Node, One File**.
+### Simplicity
 
-While this means a large number of files (e.g., 500 nodes = 500 files), our CLI tool handles the heavy lifting:
+JejuCD does not assume a heavy container runtime or a complex orchestrator. A lightweight Rust Agent runs on each server and applies the deployment work and runtime configuration needed for that machine.
 
-```bash
-# Generate 500 node configurations instantly via CLI scaffolding
-jejucd generate nodes --base dc-seoul.toml --count 500 --prefix worker
-```
+### Explicit Targeting
 
-This guarantees that an error in one file is isolated to exactly one machine, ensuring ultimate safety for enterprise and edge deployments.
+Deployment targets and application state are declared explicitly in Git. An application is deployed only when its environment, role, tag, or node name requirements match the role/tag conditions declared by the server.
+
+### Failure Isolation
+
+Each server works from the state that belongs to it. This reduces the chance that a configuration mistake for one server affects other servers, and makes it clear which application should run on which machine.
+
+### Existing Infrastructure First
+
+JejuCD is designed to use existing VMs, EC2 instances, bare-metal servers, and edge devices. It fits into Linux server operations and systemd-based process management instead of requiring a new orchestration platform.
 
 ---
 
-## Quick Start
+## Current Status
 
 ![jeju_stone](docs/assets/jeju_stone.jpg)
 
-*Coming soon: Installation scripts and comprehensive documentation.*
+JejuCD is currently in early development. Features and architecture may change as the product evolves and receives feedback.
 
-**Expected workflow:**
-1. Fork the `jejucd/state` repository.
-2. Define your desired binary versions and node targets via TOML.
-3. Install the jejucd agent on your target machine:
-   ```bash
-   curl -sL https://jejucd.com/install.sh | bash
-   ```
-4. Push a commit to your Git repo. The Agent will pull the binary, configure systemd, and reconcile the state within seconds.
-
----
-
-## Contributing
-
-![hallabong](docs/assets/hallabong.jpg)
-
-We are building the future of binary deployments and are actively seeking contributors. Whether you are a Rustacean, a DevOps engineer, or someone passionate about lightweight infrastructure, we welcome your PRs.
-
-jejucd is built with the ambition to integrate with global open-source foundations (such as LF Edge) to set a new standard for non-containerized CD.
+The project was previously described mostly as "binary deployment", but the product direction is broader: application artifact deployment. Binary deployment is the main use case today, while the design is moving toward handling build outputs more generally.
 
 ---
 
 ## License
+
+![hallabong](docs/assets/hallabong.jpg)
 
 This project is licensed under the [Apache License 2.0](LICENSE).
